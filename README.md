@@ -4,7 +4,6 @@ A lightweight, browser-based utility that converts natural language business cri
 
 Unlike complex RAG systems, this tool reads a dedicated `tables.md` Star Schema file and injects it directly into the LLM context, bridging the gap between business logic and database queries with zero infrastructure.
 
-![Lean SQL-Gen generating SQL with syntax highlighting](.gemini/antigravity/brain/21c24290-8c3d-4e28-a1ae-290ed745902e/generated_sql_correct_highlighting_1775669900928.png)
 
 ## 📌 Features
 
