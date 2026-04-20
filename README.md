@@ -39,7 +39,9 @@ npm install
 Ensure there is an `.env` file in the root directory containing your OpenRouter API key:
 
 ```env
-OPEN_ROUTER_API="sk-or-v1-..."
+OPEN_ROUTER_API=sk-or-v1-...
+# Optional: lower response token budget if credits are limited
+OPENROUTER_MAX_TOKENS=1024
 ```
 
 ### 4. Running Locally

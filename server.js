@@ -49,13 +49,23 @@ function getOpenRouterApiKey() {
   return raw.trim().replace(/^['\"]|['\"]$/g, '');
 }
 
-/** Call OpenRouter API */
-async function callOpenRouter(systemPrompt, userMessage) {
-  const apiKey = getOpenRouterApiKey();
-  if (!apiKey) {
-    throw new Error('OpenRouter API key is missing. Set OPEN_ROUTER_API or OPENROUTER_API_KEY in .env/runtime env.');
-  }
+/** Parse a positive integer env var with fallback */
+function readPositiveIntEnv(name, fallback) {
+  const value = Number.parseInt((process.env[name] || '').trim(), 10);
+  return Number.isInteger(value) && value > 0 ? value : fallback;
+}
 
+/** Extract affordable max token count from OpenRouter 402 message */
+function parseAffordableMaxTokens(message) {
+  const match = message.match(/can only afford\s+(\d+)/i);
+  if (!match) return null;
+
+  const affordable = Number.parseInt(match[1], 10);
+  return Number.isInteger(affordable) && affordable > 0 ? affordable : null;
+}
+
+/** Perform one OpenRouter completion call */
+async function requestCompletion({ apiKey, systemPrompt, userMessage, maxTokens }) {
   const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -71,18 +81,51 @@ async function callOpenRouter(systemPrompt, userMessage) {
         { role: 'user', content: userMessage },
       ],
       temperature: 0.1,
-      max_tokens: 2048,
+      max_tokens: maxTokens,
     }),
   });
 
+  const payload = await response.json().catch(() => ({}));
+  return { response, payload };
+}
+
+/** Call OpenRouter API */
+async function callOpenRouter(systemPrompt, userMessage) {
+  const apiKey = getOpenRouterApiKey();
+  if (!apiKey) {
+    throw new Error('OpenRouter API key is missing. Set OPEN_ROUTER_API or OPENROUTER_API_KEY in .env/runtime env.');
+  }
+
+  const configuredMaxTokens = readPositiveIntEnv('OPENROUTER_MAX_TOKENS', 1024);
+  let { response, payload } = await requestCompletion({
+    apiKey,
+    systemPrompt,
+    userMessage,
+    maxTokens: configuredMaxTokens,
+  });
+
+  // If credits are tight, retry once with the affordable cap from OpenRouter's message.
+  if (!response.ok && response.status === 402) {
+    const message = payload?.error?.message || '';
+    const affordableMaxTokens = parseAffordableMaxTokens(message);
+
+    if (affordableMaxTokens && affordableMaxTokens < configuredMaxTokens) {
+      ({ response, payload } = await requestCompletion({
+        apiKey,
+        systemPrompt,
+        userMessage,
+        maxTokens: affordableMaxTokens,
+      }));
+    }
+  }
+
   if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
     throw new Error(
-      `OpenRouter API error (${response.status}): ${err.error?.message || response.statusText}`
+      `OpenRouter API error (${response.status}): ${payload.error?.message || response.statusText}`
     );
   }
 
-  const data = await response.json();
+  const data = payload;
   let sql = data.choices?.[0]?.message?.content?.trim() || '';
 
   // Strip markdown code fences if the model wraps them anyway
