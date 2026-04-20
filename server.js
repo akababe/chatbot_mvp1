@@ -43,11 +43,17 @@ Rules:
 6. Format the SQL nicely with line breaks and indentation for readability.`;
 }
 
+/** Resolve OpenRouter key from supported env names */
+function getOpenRouterApiKey() {
+  const raw = process.env.OPEN_ROUTER_API || process.env.OPENROUTER_API_KEY || '';
+  return raw.trim().replace(/^['\"]|['\"]$/g, '');
+}
+
 /** Call OpenRouter API */
 async function callOpenRouter(systemPrompt, userMessage) {
-  const apiKey = process.env.OPEN_ROUTER_API;
+  const apiKey = getOpenRouterApiKey();
   if (!apiKey) {
-    throw new Error('OPEN_ROUTER_API key is not set in .env');
+    throw new Error('OpenRouter API key is missing. Set OPEN_ROUTER_API or OPENROUTER_API_KEY in .env/runtime env.');
   }
 
   const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
